@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -30,13 +30,23 @@ export default function DashboardPage() {
     const [connectionUrl, setConnectionUrl] = useState(null);
     const { isConnected, lastMessage, sendMessage } = useWebSocket(connectionUrl);
 
+    // Client-Side Stream Refs
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+    const streamIntervalRef = useRef(null);
+
     // Clear data if not connected to prevent stale frames/detections
     const detections = isConnected ? (lastMessage?.detections || []) : [];
     const frame = isConnected ? lastMessage?.frame : null;
 
     const handleStartStream = () => {
-        // Use wss:// for secure (HTTPS) connections on Hugging Face
-        let url = `wss://ghauri21-ppedetector.hf.space/ws/detect/live?source_type=${sourceType}`;
+        // Use correct source type for deployment
+        // If camera, we use 'client' to tell backend we will send frames
+        // If RTSP, backend handles it
+
+        const type = sourceType === 'camera' ? 'client' : 'rtsp';
+
+        let url = `wss://ghauri21-ppedetector.hf.space/ws/detect/live?source_type=${type}`;
         if (sourceType === 'rtsp') {
             const { protocol, ip, port, username, password } = rtspConfig;
             if (!ip || !port) return alert("IP and Port are required for RTSP");
@@ -47,7 +57,43 @@ export default function DashboardPage() {
 
     const handleStopStream = () => {
         setConnectionUrl(null);
+        // Stop client stream if active
+        if (streamIntervalRef.current) clearInterval(streamIntervalRef.current);
+        if (videoRef.current && videoRef.current.srcObject) {
+            videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+        }
     };
+
+    // Effect to handle Client-Side Streaming when connected
+    useEffect(() => {
+        if (isConnected && sourceType === 'camera') {
+            // Start Webcam
+            navigator.mediaDevices.getUserMedia({ video: { width: 640 } })
+                .then(stream => {
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                        videoRef.current.play();
+
+                        // Start sending frames
+                        streamIntervalRef.current = setInterval(() => {
+                            if (!videoRef.current || !canvasRef.current || !isConnected) return;
+
+                            const ctx = canvasRef.current.getContext('2d');
+                            ctx.drawImage(videoRef.current, 0, 0, 640, 480);
+                            const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.5); // Compression 0.5
+
+                            sendMessage({ image: dataUrl });
+
+                        }, 150); // ~7 FPS to save bandwidth
+                    }
+                })
+                .catch(err => console.error("Error accessing webcam:", err));
+        }
+
+        return () => {
+            if (streamIntervalRef.current) clearInterval(streamIntervalRef.current);
+        };
+    }, [isConnected, sourceType, sendMessage]);
 
     const handleROIUpdate = (polygon) => {
         if (isConnected) {
@@ -91,6 +137,10 @@ export default function DashboardPage() {
             </div>
 
             <div className="min-h-[500px] animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+                {/* Hidden Elements for Client-Side Streaming */}
+                <video ref={videoRef} className="hidden" muted playsInline />
+                <canvas ref={canvasRef} width="640" height="480" className="hidden" />
 
                 {activeTab === 'realtime' && (
                     <div className="flex flex-col gap-6">
