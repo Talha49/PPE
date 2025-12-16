@@ -64,9 +64,14 @@ export default function VideoAnalyzer() {
                 <div className="flex-1 px-4 text-zinc-600 truncate font-mono text-sm">
                     {file ? file.name : "No file selected"}
                 </div>
-                <Button disabled={!file || processing} onClick={handleProcess} isLoading={processing}>
+                <Button disabled={!file || processing || streamUrl} onClick={handleProcess} isLoading={processing}>
                     Start Processing
                 </Button>
+                {streamUrl && (
+                    <Button variant="destructive" onClick={() => setStreamUrl(null)}>
+                        Stop Stream
+                    </Button>
+                )}
             </div>
 
             {/* Video Player Area */}
