@@ -28,9 +28,16 @@ export default function VideoAnalyzer() {
 
             if (response.ok) {
                 const data = await response.json();
-                // Fix: Backend returns localhost URL, we need to replace it with the real one
-                const fixedUrl = data.stream_url.replace('http://127.0.0.1:8000', 'https://ghauri21-ppedetector.hf.space');
-                setStreamUrl(fixedUrl);
+                let url = data.stream_url;
+
+                // If relative path, prepend backend domain
+                if (url.startsWith('/')) {
+                    url = `https://ghauri21-ppedetector.hf.space${url}`;
+                } else {
+                    // Fallback for older backend versions returning localhost
+                    url = url.replace('http://127.0.0.1:8000', 'https://ghauri21-ppedetector.hf.space');
+                }
+                setStreamUrl(url);
             } else {
                 alert('Analysis failed');
             }
