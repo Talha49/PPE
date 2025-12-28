@@ -46,7 +46,9 @@ export default function DashboardPage() {
 
         const type = sourceType === 'camera' ? 'client' : 'rtsp';
 
-        let url = `wss://ghauri21-ppedetector.hf.space/ws/detect/live?source_type=${type}`;
+        // let url = `wss://ghauri21-ppedetector.hf.space/ws/detect/live?source_type=${type}`;
+        let url = `ws://127.0.0.1:8000/ws/detect/live?source_type=${sourceType}`;
+
         if (sourceType === 'rtsp') {
             const { protocol, ip, port, username, password } = rtspConfig;
             if (!ip || !port) return alert("IP and Port are required for RTSP");
@@ -57,6 +59,7 @@ export default function DashboardPage() {
 
     const handleStopStream = () => {
         setConnectionUrl(null);
+        setIsAlertActive(false); // Immediate reset on stop
         // Stop client stream if active
         if (streamIntervalRef.current) clearInterval(streamIntervalRef.current);
         if (videoRef.current && videoRef.current.srcObject) {
@@ -94,6 +97,31 @@ export default function DashboardPage() {
             if (streamIntervalRef.current) clearInterval(streamIntervalRef.current);
         };
     }, [isConnected, sourceType, sendMessage]);
+
+    const [isAlertActive, setIsAlertActive] = useState(false);
+    const alertAudioRef = useRef(null);
+
+    // Initialize audio on mount
+    useEffect(() => {
+        alertAudioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        alertAudioRef.current.volume = 0.5;
+    }, []);
+
+    // Effect to handle alerts from WebSocket
+    useEffect(() => {
+        if (isConnected && lastMessage?.alert_active) {
+            setIsAlertActive(true);
+
+            // Play alert sound if not already playing
+            if (alertAudioRef.current && alertAudioRef.current.paused) {
+                alertAudioRef.current.play().catch(e => console.log("Audio play blocked by browser"));
+            }
+
+            // Auto-reset alert after 2 seconds if no new alert signal arrives
+            const timer = setTimeout(() => setIsAlertActive(false), 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [lastMessage, isConnected]);
 
     const handleROIUpdate = (polygon) => {
         if (isConnected) {
@@ -229,6 +257,7 @@ export default function DashboardPage() {
                                         streamUrl={frame}
                                         isStreaming={isConnected}
                                         onROIChange={handleROIUpdate}
+                                        isAlertActive={isAlertActive}
                                     />
                                 </div>
                             </CardContent>

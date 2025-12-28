@@ -1,109 +1,186 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
 export function useROI(canvasRef, videoRef) {
-    const [points, setPoints] = useState([]);
+    const [zones, setZones] = useState([]); // Array of { id, points, type, name }
+    const [activeZoneId, setActiveZoneId] = useState(null);
+    const [points, setPoints] = useState([]); // For drawing a NEW polygon
     const [isDrawing, setIsDrawing] = useState(false);
-    const [polygon, setPolygon] = useState(null); // Completed polygon
+    
+    // Dragging state
+    const [draggingPoint, setDraggingPoint] = useState(null); // { zoneId, pointIndex }
 
     const draw = useCallback(() => {
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext('2d');
         if (!canvas || !ctx) return;
 
-        // Clear
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Drawing Style
-        ctx.strokeStyle = '#f59e0b'; // Amber-500
-        ctx.lineWidth = 2;
-        ctx.fillStyle = 'rgba(245, 158, 11, 0.2)';
+        // 1. Draw Existing Polygons
+        zones.forEach(zone => {
+            const isSelected = activeZoneId === zone.id;
+            
+            // Color based on type
+            let color = '#f59e0b'; // Amber (Standard)
+            if (zone.type === 'danger') color = '#ef4444'; // Red
+            if (zone.type === 'safe') color = '#22c55e'; // Green
 
-        // Draw active points
-        const activePoints = points.length > 0 ? points : (polygon || []);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = isSelected ? 3 : 2;
+            ctx.fillStyle = zone.type === 'danger' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(242, 158, 11, 0.1)';
 
-        if (activePoints.length === 0) return;
-
-        ctx.beginPath();
-        ctx.moveTo(activePoints[0].x, activePoints[0].y);
-
-        activePoints.forEach((p, i) => {
-            if (i > 0) ctx.lineTo(p.x, p.y);
-            // Draw vertext circles
-            // ctx.fillRect(p.x - 2, p.y - 2, 4, 4); 
-        });
-
-        if (polygon) {
+            ctx.beginPath();
+            zone.points.forEach((p, i) => {
+                if (i === 0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
+            });
             ctx.closePath();
             ctx.stroke();
             ctx.fill();
-        } else {
-            ctx.stroke();
-            // Draw little circles for vertices
-             activePoints.forEach(p => {
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-                ctx.fillStyle = '#f59e0b';
-                ctx.fill();
-             });
-        }
-    }, [points, polygon]);
 
-    // Re-draw whenever points change
+            // Draw Vertices if selected
+            if (isSelected) {
+                zone.points.forEach((p, i) => {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = color;
+                    ctx.fill();
+                    ctx.strokeStyle = '#fff';
+                    ctx.stroke();
+                });
+            }
+        });
+
+        // 2. Draw Active (In-progress) Points
+        if (isDrawing && points.length > 0) {
+            ctx.strokeStyle = '#6366f1'; // Indigo
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            points.forEach((p, i) => {
+                if (i === 0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
+            });
+            ctx.stroke();
+            points.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#6366f1';
+                ctx.fill();
+            });
+        }
+    }, [points, zones, isDrawing, activeZoneId, canvasRef]);
+
+    // Sync canvas internal resolution with its display size
+    useEffect(() => {
+        const syncResolution = () => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            if (canvas.width !== rect.width || canvas.height !== rect.height) {
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+                draw(); // Redraw immediately
+            }
+        };
+
+        syncResolution();
+        window.addEventListener('resize', syncResolution);
+        return () => window.removeEventListener('resize', syncResolution);
+    }, [draw]);
+
     useEffect(() => {
         draw();
     }, [draw]);
 
     const addPoint = (x, y) => {
-        if (!isDrawing && !polygon) return; // Must be in drawing mode or fresh
-        if (polygon) return; // Already finished
-
-        // Add point in Canvas Coordinates
+        if (!isDrawing) return;
         setPoints(prev => [...prev, { x, y }]);
     };
 
-    const finishPolygon = () => {
+    const finishZone = (type = 'ppe', name = 'Zone') => {
         if (points.length < 3) return;
-        setPolygon(points);
+        const newZone = {
+            id: Date.now(),
+            points: [...points],
+            type,
+            name: `${name} ${zones.length + 1}`
+        };
+        setZones(prev => [...prev, newZone]);
         setPoints([]);
         setIsDrawing(false);
-        return points; // Return canvas coords
+        setActiveZoneId(newZone.id);
     };
 
-    const clearROI = () => {
-        setPoints([]);
-        setPolygon(null);
-        setIsDrawing(true); // Reset to drawing mode if wanted
+    const startDragging = (x, y) => {
+        // Hit test for vertices
+        for (const zone of zones) {
+            for (let i = 0; i < zone.points.length; i++) {
+                const p = zone.points[i];
+                const dist = Math.sqrt((p.x - x) ** 2 + (p.y - y) ** 2);
+                if (dist < 10) {
+                    setDraggingPoint({ zoneId: zone.id, pointIndex: i });
+                    setActiveZoneId(zone.id);
+                    return true;
+                }
+            }
+        }
+        return false;
     };
 
-    // Helper to get scaled points for Backend
-    const getBackendPolygon = () => {
-        if (!polygon || !canvasRef.current || !videoRef.current) return null;
-        
+    const handleDrag = (x, y) => {
+        if (!draggingPoint) return;
+        setZones(prev => prev.map(zone => {
+            if (zone.id === draggingPoint.zoneId) {
+                const newPoints = [...zone.points];
+                newPoints[draggingPoint.pointIndex] = { x, y };
+                return { ...zone, points: newPoints };
+            }
+            return zone;
+        }));
+    };
+
+    const stopDragging = () => {
+        setDraggingPoint(null);
+    };
+
+    const deleteActiveZone = () => {
+        setZones(prev => prev.filter(z => z.id !== activeZoneId));
+        setActiveZoneId(null);
+    };
+
+    const getBackendPolygons = () => {
         const canvas = canvasRef.current;
-        const element = videoRef.current;
+        if (!canvas) return [];
         
-        // Handle both Video and Img tags
-        const naturalWidth = element.naturalWidth || element.videoWidth || 640;
-        const naturalHeight = element.naturalHeight || element.videoHeight || 480;
+        const width = canvas.width;
+        const height = canvas.height;
 
-        const scaleX = naturalWidth / canvas.width;
-        const scaleY = naturalHeight / canvas.height; 
-
-        return polygon.map(p => ([
-             p.x * scaleX,
-             p.y * scaleY
-        ]));
+        return zones.map(zone => ({
+            id: zone.id,
+            name: zone.name,
+            type: zone.type,
+            // Send normalized coordinates (0 to 1) for full robustness
+            polygon: zone.points.map(p => [
+                parseFloat((p.x / width).toFixed(4)), 
+                parseFloat((p.y / height).toFixed(4))
+            ])
+        }));
     };
 
     return {
+        zones,
         points,
-        polygon, // Exposed state
         isDrawing,
+        activeZoneId,
+        setActiveZoneId,
         setIsDrawing,
         addPoint,
-        finishPolygon,
-        clearROI,
-        getBackendPolygon,
-        draw // Force draw
+        finishZone,
+        startDragging,
+        handleDrag,
+        stopDragging,
+        deleteActiveZone,
+        getBackendPolygons,
+        clearAll: () => setZones([])
     };
 }
