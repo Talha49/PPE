@@ -46,8 +46,8 @@ export default function DashboardPage() {
 
         const type = sourceType === 'camera' ? 'client' : 'rtsp';
 
-        // let url = `wss://ghauri21-ppedetector.hf.space/ws/detect/live?source_type=${type}`;
-        let url = `ws://127.0.0.1:8000/ws/detect/live?source_type=${sourceType}`;
+        let url = `wss://ghauri21-ppedetector.hf.space/ws/detect/live?source_type=${type}`;
+        // let url = `ws://127.0.0.1:8000/ws/detect/live?source_type=${sourceType}`;
 
         if (sourceType === 'rtsp') {
             const { protocol, ip, port, username, password } = rtspConfig;
