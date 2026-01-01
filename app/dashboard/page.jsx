@@ -76,19 +76,23 @@ function DashboardContent() {
 
     const handleStartStream = () => {
         if (!selectedCamera) return;
-
         const { sourceType, streamUrl } = selectedCamera;
 
-        // Connect to local AI backend with Quality, Privacy, and Detection flags
-        // PRO FIX: When using 'camera' mode, we must tell the backend to use 'client' source_type
-        // so it waits for frames from the browser instead of trying to open server-side hardware.
-        const backendSource = sourceType === 'camera' ? 'client' : sourceType;
-        let url = `wss://ghauri21-ppedetector.hf.space/ws/detect/live?source_type=${backendSource}&quality=${streamQuality}&privacy=${privacyMode}&detections=${detectionsEnabled}`;
+        // --- SMART ENVIRONMENT SWITCHER ---
+        const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        const host = isLocal ? '127.0.0.1:8000' : 'ghauri21-ppedetector.hf.space';
+        const protocol = isLocal ? 'ws' : 'wss';
+
+        // Use 'client' mode only when in the cloud for webcams
+        const mode = (sourceType === 'camera' && !isLocal) ? 'client' : sourceType;
+
+        let url = `${protocol}://${host}/ws/detect/live?source_type=${mode}&quality=${streamQuality}&privacy=${privacyMode}&detections=${detectionsEnabled}`;
 
         if (sourceType === 'rtsp' && streamUrl) {
             url += `&custom_url=${encodeURIComponent(streamUrl)}`;
         }
 
+        console.log(`🔌 Initializing AI Engine [${isLocal ? 'LOCAL' : 'CLOUD'}]: ${url}`);
         setConnectionUrl(url);
     };
 
