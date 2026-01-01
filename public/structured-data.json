@@ -1,0 +1,61 @@
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://ppesentry.com/#organization",
+      "name": "SafeGuard AI",
+      "url": "https://ppesentry.com",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://ppesentry.com/logo.png",
+        "width": 512,
+        "height": 512
+      },
+      "description": "Enterprise-grade PPE compliance monitoring with real-time AI detection",
+      "sameAs": [
+        "https://twitter.com/safeguardai",
+        "https://linkedin.com/company/safeguardai"
+      ]
+    },
+    {
+      "@type": "WebApplication",
+      "@id": "https://ppesentry.com/#webapp",
+      "name": "PPE Sentry",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web Browser",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "description": "Real-time PPE detection and compliance monitoring for construction sites and industrial facilities",
+      "featureList": [
+        "Real-time RTSP camera monitoring",
+        "AI-powered PPE detection",
+        "Automated compliance reporting",
+        "GDPR-compliant facial blurring",
+        "Multi-site management",
+        "ROI-based zone monitoring",
+        "Instant safety alerts"
+      ]
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://ppesentry.com/#software",
+      "name": "PPE Sentry Platform",
+      "applicationCategory": "SecurityApplication",
+      "operatingSystem": "Cross-platform",
+      "offers": {
+        "@type": "Offer",
+        "price": "Contact for pricing",
+        "priceCurrency": "USD"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.9",
+        "ratingCount": "127"
+      }
+    }
+  ]
+}

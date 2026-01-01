@@ -169,6 +169,7 @@ export function useROI(canvasRef, videoRef) {
 
     return {
         zones,
+        setZones,
         points,
         isDrawing,
         activeZoneId,

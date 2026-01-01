@@ -3,15 +3,17 @@ import { Badge } from '@/components/ui/Badge';
 import { Download, Table as TableIcon, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
-export default function DetectionTable({ detections = [], onLogsUpdate }) {
+export default function DetectionTable({ detections = [], onLogsUpdate, siteId, cameraId }) {
     const [logs, setLogs] = useState([]);
     const lastLoggedRef = useRef(new Map()); // Map<key, timestamp>
     const COOLDOWN = 5000; // 5 seconds
 
     useEffect(() => {
-        if (!detections || detections.length === 0) return;
+        if (!detections || detections.length === 0 || !siteId || !cameraId) return;
 
         let hasNew = false;
+        const newEntries = [];
+
         detections.forEach(d => {
             if (d.id === undefined || d.id === -1) return;
 
@@ -29,22 +31,28 @@ export default function DetectionTable({ detections = [], onLogsUpdate }) {
             hasNew = true;
 
             const newEntry = {
+                uid: `${now}-${Math.random().toString(36).substr(2, 9)}`,
                 id: d.id,
                 time: new Date().toLocaleTimeString(),
                 date: new Date().toLocaleDateString(),
                 object: d.class_name,
                 conf: d.conf,
                 status: status,
-                zone: zone
+                zone: zone,
+                compliance_status: status // For DB consistency
             };
 
+            newEntries.push(newEntry);
+        });
+
+        if (hasNew && newEntries.length > 0) {
             setLogs(prev => {
-                const updated = [newEntry, ...prev].slice(0, 50); // Keep more for export
+                const updated = [...newEntries, ...prev].slice(0, 50);
                 if (onLogsUpdate) onLogsUpdate(updated);
                 return updated;
             });
-        });
-    }, [detections, onLogsUpdate]);
+        }
+    }, [detections, onLogsUpdate, siteId, cameraId]);
 
     const exportToCSV = () => {
         if (logs.length === 0) return alert("No logs to export yet!");
@@ -88,8 +96,8 @@ export default function DetectionTable({ detections = [], onLogsUpdate }) {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-50">
-                        {logs.map((row, i) => (
-                            <TableRow key={`${row.id}-${row.time}`} data={row} />
+                        {logs.map((row) => (
+                            <TableRow key={row.uid} data={row} />
                         ))}
                         {logs.length === 0 && (
                             <tr>
