@@ -78,15 +78,11 @@ function DashboardContent() {
         if (!selectedCamera) return;
         const { sourceType, streamUrl } = selectedCamera;
 
-        // --- PRODUCTION CLOUD CONFIG ---
-        const host = 'ghauri21-ppedetector.hf.space';
-        const protocol = 'wss';
-
-        // 1. Determine if this camera is "Private" (Local Network)
+        // 1. Detect Private/Local IP (DroidCam)
         const isPrivate = streamUrl && (streamUrl.includes('192.168.') || streamUrl.includes('10.') || streamUrl.includes('localhost') || streamUrl.includes('127.0.0.1'));
 
         // 2. Select Connection Mode:
-        // - 'client' relay for Webcams and Private DroidCams (Required for Cloud)
+        // - 'client' relay for Webcams and Private DroidCams (Required for Cloud Security)
         // - 'rtsp' (Direct AI Connect) for public URLs
         const mode = (sourceType === 'camera' || isPrivate) ? 'client' : 'rtsp';
 
@@ -97,7 +93,7 @@ function DashboardContent() {
             url += `&custom_url=${encodeURIComponent(streamUrl)}`;
         }
 
-        console.log(`🚀 [ENGINE] Starting Stream [Mode: ${mode}]: ${url}`);
+        console.log(`🚀 [SECURE CONNECT] Initializing Engine: ${url}`);
         setConnectionUrl(url);
     };
 
@@ -110,15 +106,15 @@ function DashboardContent() {
         }
     };
 
-    // --- DEEP-SYNC RELAY BRIDGE ---
+    // --- SECURE PROXY BRIDGE ---
     useEffect(() => {
         if (!isConnected || !selectedCamera || !connectionUrl?.includes('source_type=client')) return;
 
         const isWebcam = selectedCamera.sourceType === 'camera';
 
         if (isWebcam) {
-            // RELAY: Physical Webcam
-            navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+            // RELAY A: Hardware Webcam
+            navigator.mediaDevices.getUserMedia({ video: { width: 640 } })
                 .then(stream => {
                     if (videoRef.current) {
                         videoRef.current.srcObject = stream;
@@ -129,21 +125,22 @@ function DashboardContent() {
                             ctx.drawImage(videoRef.current, 0, 0, 640, 480);
                             const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.5);
                             sendMessage({ image: dataUrl });
-                        }, 130); // High-performance 7.5 FPS
+                        }, 150);
                     }
                 })
-                .catch(err => console.error("Webcam blocked by browser:", err));
+                .catch(err => console.error("Webcam blocked:", err));
         } else {
-            // BRIDGE: Private IP (DroidCam)
+            // RELAY B: Private IP (DroidCam) via Secure API Proxy
+            const proxyUrl = `/api/proxy?url=${encodeURIComponent(selectedCamera.streamUrl)}`;
             const img = new Image();
             img.crossOrigin = "anonymous";
-            img.src = selectedCamera.streamUrl;
 
             let loadError = false;
             img.onerror = () => {
                 loadError = true;
-                console.warn("🛡️ SECURITY NOTICE: Browser is blocking the DroidCam link. \n 👉 To fix: Click Lock icon -> Site Settings -> Allow 'Insecure Content'.");
+                console.warn("🛡️ SECURITY NOTICE: Proxy failed to relay DroidCam.");
             };
+            img.src = proxyUrl;
 
             streamIntervalRef.current = setInterval(() => {
                 if (!canvasRef.current || !isConnected || loadError) return;
@@ -153,7 +150,7 @@ function DashboardContent() {
                     const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.5);
                     sendMessage({ image: dataUrl });
                 }
-            }, 130);
+            }, 150);
         }
 
         return () => { if (streamIntervalRef.current) clearInterval(streamIntervalRef.current); };
