@@ -80,8 +80,10 @@ function DashboardContent() {
         const { sourceType, streamUrl } = selectedCamera;
 
         // Connect to local AI backend with Quality, Privacy, and Detection flags
-        // let url = `ws://127.0.0.1:8000/ws/detect/live?source_type=${sourceType}&quality=${streamQuality}&privacy=${privacyMode}&detections=${detectionsEnabled}`;
-        let url = `wss://ghauri21-ppedetector.hf.space/ws/detect/live?source_type=${sourceType}&quality=${streamQuality}&privacy=${privacyMode}&detections=${detectionsEnabled}`;
+        // PRO FIX: When using 'camera' mode, we must tell the backend to use 'client' source_type
+        // so it waits for frames from the browser instead of trying to open server-side hardware.
+        const backendSource = sourceType === 'camera' ? 'client' : sourceType;
+        let url = `wss://ghauri21-ppedetector.hf.space/ws/detect/live?source_type=${backendSource}&quality=${streamQuality}&privacy=${privacyMode}&detections=${detectionsEnabled}`;
 
         if (sourceType === 'rtsp' && streamUrl) {
             url += `&custom_url=${encodeURIComponent(streamUrl)}`;
