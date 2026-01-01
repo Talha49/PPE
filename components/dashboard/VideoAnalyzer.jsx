@@ -20,9 +20,8 @@ export default function VideoAnalyzer() {
         const formData = new FormData();
         formData.append('file', file);
 
-        // SMART BACKEND DETECTOR
-        const isLocalHost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-        const apiBase = isLocalHost ? 'http://127.0.0.1:8000' : 'https://ghauri21-ppedetector.hf.space';
+        // --- PRODUCTION CLOUD CONFIG ---
+        const apiBase = 'https://ghauri21-ppedetector.hf.space';
 
         try {
             const response = await fetch(`${apiBase}/api/detect/video`, {
@@ -34,11 +33,10 @@ export default function VideoAnalyzer() {
                 const data = await response.json();
                 let url = data.stream_url;
 
-                // If relative path, prepend dynamic backend base
+                // Sync with Production Backend
                 if (url.startsWith('/')) {
                     url = `${apiBase}${url}`;
                 } else {
-                    // Replace legacy hardcoded IPs with current dynamic base
                     url = url.replace('http://127.0.0.1:8000', apiBase);
                 }
                 setStreamUrl(url);

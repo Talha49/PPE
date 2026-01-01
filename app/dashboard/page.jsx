@@ -78,21 +78,25 @@ function DashboardContent() {
         if (!selectedCamera) return;
         const { sourceType, streamUrl } = selectedCamera;
 
-        // --- SMART ENVIRONMENT SWITCHER ---
-        const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-        const host = isLocal ? '127.0.0.1:8000' : 'ghauri21-ppedetector.hf.space';
-        const protocol = isLocal ? 'ws' : 'wss';
+        // --- HARDCODED CLOUD CONFIGURATION --- (No more Localhost logic)
+        const host = 'ghauri21-ppedetector.hf.space';
+        const protocol = 'wss';
 
-        // Use 'client' mode only when in the cloud for webcams
-        const mode = (sourceType === 'camera' && !isLocal) ? 'client' : sourceType;
+        // --- THE RELAY BRIDGE ---
+        // If it's a webcam OR a private Home IP (DroidCam 192.168.x.x), 
+        // we relay it through the browser to bypass the Cloud network wall.
+        const isPrivate = streamUrl && (streamUrl.includes('192.168.') || streamUrl.includes('10.') || streamUrl.includes('localhost') || streamUrl.includes('127.0.0.1'));
+        const mode = (sourceType === 'camera' || (sourceType === 'rtsp' && isPrivate)) ? 'client' : 'rtsp';
 
+        // Build the Cloud URL
         let url = `${protocol}://${host}/ws/detect/live?source_type=${mode}&quality=${streamQuality}&privacy=${privacyMode}&detections=${detectionsEnabled}`;
 
-        if (sourceType === 'rtsp' && streamUrl) {
+        // Only send custom_url if it's a Public IP the cloud can actually see
+        if (sourceType === 'rtsp' && !isPrivate) {
             url += `&custom_url=${encodeURIComponent(streamUrl)}`;
         }
 
-        console.log(`🔌 Initializing AI Engine [${isLocal ? 'LOCAL' : 'CLOUD'}]: ${url}`);
+        console.log(`🚀 [CLOUD-ONLY] Connecting to AI Engine: ${url}`);
         setConnectionUrl(url);
     };
 
@@ -105,9 +109,14 @@ function DashboardContent() {
         }
     };
 
-    // Effect to handle Client-Side Streaming (Webcam)
+    // --- CLOUD RELAY EFFECT: Tunnels Webcam/DroidCam to the Cloud AI ---
     useEffect(() => {
-        if (isConnected && selectedCamera?.sourceType === 'camera') {
+        if (!isConnected || !selectedCamera || !connectionUrl?.includes('source_type=client')) return;
+
+        const isWebcam = selectedCamera.sourceType === 'camera';
+
+        if (isWebcam) {
+            // RELAY A: Hardware Webcam
             navigator.mediaDevices.getUserMedia({ video: { width: 640 } })
                 .then(stream => {
                     if (videoRef.current) {
@@ -122,10 +131,25 @@ function DashboardContent() {
                         }, 150);
                     }
                 })
-                .catch(err => console.error("Error accessing webcam:", err));
+                .catch(err => console.error("Webcam blocked:", err));
+        } else {
+            // RELAY B: Private IP (DroidCam) Bridge
+            // The browser fetches the private frames and "tunnels" them to the Cloud AI
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = selectedCamera.streamUrl;
+
+            streamIntervalRef.current = setInterval(() => {
+                if (!canvasRef.current || !isConnected) return;
+                const ctx = canvasRef.current.getContext('2d');
+                ctx.drawImage(img, 0, 0, 640, 480);
+                const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.5);
+                sendMessage({ image: dataUrl });
+            }, 150);
         }
+
         return () => { if (streamIntervalRef.current) clearInterval(streamIntervalRef.current); };
-    }, [isConnected, selectedCamera, sendMessage]);
+    }, [isConnected, selectedCamera, sendMessage, connectionUrl]);
 
     // --- SMART INCIDENT SYNTHESIS ---
     const activeIncidentsRef = useRef(new Map()); // Map<id, { startTime, captured }>
