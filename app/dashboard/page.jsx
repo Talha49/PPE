@@ -134,17 +134,26 @@ function DashboardContent() {
                 .catch(err => console.error("Webcam blocked:", err));
         } else {
             // RELAY B: Private IP (DroidCam) Bridge
-            // The browser fetches the private frames and "tunnels" them to the Cloud AI
             const img = new Image();
             img.crossOrigin = "anonymous";
             img.src = selectedCamera.streamUrl;
 
+            let isBroken = false;
+            img.onerror = () => {
+                isBroken = true;
+                console.error("⛔ BROWSER SECURITY BLOCK: Chrome is blocking your DroidCam. \n👉 SOLUTION: Click the Lock icon in address bar -> Site Settings -> Allow 'Insecure Content'.");
+            };
+
             streamIntervalRef.current = setInterval(() => {
-                if (!canvasRef.current || !isConnected) return;
-                const ctx = canvasRef.current.getContext('2d');
-                ctx.drawImage(img, 0, 0, 640, 480);
-                const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.5);
-                sendMessage({ image: dataUrl });
+                if (!canvasRef.current || !isConnected || isBroken) return;
+
+                // Only draw if image is fully loaded and valid
+                if (img.complete && img.naturalWidth > 0) {
+                    const ctx = canvasRef.current.getContext('2d');
+                    ctx.drawImage(img, 0, 0, 640, 480);
+                    const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.5);
+                    sendMessage({ image: dataUrl });
+                }
             }, 150);
         }
 
