@@ -78,22 +78,26 @@ function DashboardContent() {
         if (!selectedCamera) return;
         const { sourceType, streamUrl } = selectedCamera;
 
-        // --- STANDARD CLOUD CONFIGURATION ---
+        // --- PRODUCTION CLOUD CONFIG ---
         const host = 'ghauri21-ppedetector.hf.space';
         const protocol = 'wss';
 
-        // Mode Selection: 
-        // 1. 'client' for physical webcams (Relay via browser)
-        // 2. 'rtsp' for everything else (AI Backend handles connection)
-        const mode = sourceType === 'camera' ? 'client' : 'rtsp';
+        // 1. Determine if this camera is "Private" (Local Network)
+        const isPrivate = streamUrl && (streamUrl.includes('192.168.') || streamUrl.includes('10.') || streamUrl.includes('localhost') || streamUrl.includes('127.0.0.1'));
+
+        // 2. Select Connection Mode:
+        // - 'client' relay for Webcams and Private DroidCams (Required for Cloud)
+        // - 'rtsp' (Direct AI Connect) for public URLs
+        const mode = (sourceType === 'camera' || isPrivate) ? 'client' : 'rtsp';
 
         let url = `${protocol}://${host}/ws/detect/live?source_type=${mode}&quality=${streamQuality}&privacy=${privacyMode}&detections=${detectionsEnabled}`;
 
-        if (sourceType === 'rtsp' && streamUrl) {
+        // Only pass custom_url if the Cloud AI can actually reach it (Public IPs)
+        if (sourceType === 'rtsp' && !isPrivate) {
             url += `&custom_url=${encodeURIComponent(streamUrl)}`;
         }
 
-        console.log(`🚀 [STANDARD CONNECT] Initializing Engine: ${url}`);
+        console.log(`🚀 [ENGINE] Starting Stream [Mode: ${mode}]: ${url}`);
         setConnectionUrl(url);
     };
 
@@ -106,10 +110,15 @@ function DashboardContent() {
         }
     };
 
-    // --- STANDARD WEBCAM RELAY ---
+    // --- DEEP-SYNC RELAY BRIDGE ---
     useEffect(() => {
-        if (isConnected && selectedCamera?.sourceType === 'camera') {
-            navigator.mediaDevices.getUserMedia({ video: { width: 640 } })
+        if (!isConnected || !selectedCamera || !connectionUrl?.includes('source_type=client')) return;
+
+        const isWebcam = selectedCamera.sourceType === 'camera';
+
+        if (isWebcam) {
+            // RELAY: Physical Webcam
+            navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
                 .then(stream => {
                     if (videoRef.current) {
                         videoRef.current.srcObject = stream;
@@ -120,13 +129,35 @@ function DashboardContent() {
                             ctx.drawImage(videoRef.current, 0, 0, 640, 480);
                             const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.5);
                             sendMessage({ image: dataUrl });
-                        }, 150);
+                        }, 130); // High-performance 7.5 FPS
                     }
                 })
-                .catch(err => console.error("Webcam blocked:", err));
+                .catch(err => console.error("Webcam blocked by browser:", err));
+        } else {
+            // BRIDGE: Private IP (DroidCam)
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = selectedCamera.streamUrl;
+
+            let loadError = false;
+            img.onerror = () => {
+                loadError = true;
+                console.warn("🛡️ SECURITY NOTICE: Browser is blocking the DroidCam link. \n 👉 To fix: Click Lock icon -> Site Settings -> Allow 'Insecure Content'.");
+            };
+
+            streamIntervalRef.current = setInterval(() => {
+                if (!canvasRef.current || !isConnected || loadError) return;
+                if (img.complete && img.naturalWidth > 0) {
+                    const ctx = canvasRef.current.getContext('2d');
+                    ctx.drawImage(img, 0, 0, 640, 480);
+                    const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.5);
+                    sendMessage({ image: dataUrl });
+                }
+            }, 130);
         }
+
         return () => { if (streamIntervalRef.current) clearInterval(streamIntervalRef.current); };
-    }, [isConnected, selectedCamera, sendMessage]);
+    }, [isConnected, selectedCamera, sendMessage, connectionUrl]);
 
     // --- SMART INCIDENT SYNTHESIS ---
     const activeIncidentsRef = useRef(new Map()); // Map<id, { startTime, captured }>
