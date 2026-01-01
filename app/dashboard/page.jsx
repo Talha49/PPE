@@ -78,6 +78,10 @@ function DashboardContent() {
         if (!selectedCamera) return;
         const { sourceType, streamUrl } = selectedCamera;
 
+        // --- PRODUCTION CLOUD CONFIG ---
+        const host = 'ghauri21-ppedetector.hf.space';
+        const protocol = 'wss';
+
         // 1. Detect Private/Local IP (DroidCam)
         const isPrivate = streamUrl && (streamUrl.includes('192.168.') || streamUrl.includes('10.') || streamUrl.includes('localhost') || streamUrl.includes('127.0.0.1'));
 
@@ -138,7 +142,7 @@ function DashboardContent() {
             let loadError = false;
             img.onerror = () => {
                 loadError = true;
-                console.warn("🛡️ SECURITY NOTICE: Proxy failed to relay DroidCam.");
+                console.error("⛔ PROXY ERROR: Cannot reach camera via server.");
             };
             img.src = proxyUrl;
 
