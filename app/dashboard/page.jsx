@@ -141,13 +141,17 @@ function DashboardContent() {
 
             let loadError = false;
             img.onerror = () => {
-                loadError = true;
-                console.error("⛔ PROXY ERROR: Cannot reach camera via server.");
+                if (!loadError) {
+                    loadError = true;
+                    console.error("🌐 NETWORK STATUS: Camera is currently unreachable via cloud proxy. (This is expected for local IPs on a cloud host).");
+                }
             };
             img.src = proxyUrl;
 
             streamIntervalRef.current = setInterval(() => {
                 if (!canvasRef.current || !isConnected || loadError) return;
+
+                // Only attempt to draw if the image is valid and loaded
                 if (img.complete && img.naturalWidth > 0) {
                     const ctx = canvasRef.current.getContext('2d');
                     ctx.drawImage(img, 0, 0, 640, 480);
