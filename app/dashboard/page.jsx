@@ -25,6 +25,7 @@ function DashboardContent() {
     const [selectedCamera, setSelectedCamera] = useState(null);
     const [streamQuality, setStreamQuality] = useState('sd'); // 'sd' or 'hd'
     const [privacyMode, setPrivacyMode] = useState(false); // GDPR Privacy
+    const [detectionsEnabled, setDetectionsEnabled] = useState(true); // AI On/Off
     const [aiBackend, setAiBackend] = useState('cloud'); // 'local' or 'cloud'
     const [customBackendUrl, setCustomBackendUrl] = useState('http://localhost:8000');
 
