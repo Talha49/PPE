@@ -25,7 +25,8 @@ function DashboardContent() {
     const [selectedCamera, setSelectedCamera] = useState(null);
     const [streamQuality, setStreamQuality] = useState('sd'); // 'sd' or 'hd'
     const [privacyMode, setPrivacyMode] = useState(false); // GDPR Privacy
-    const [detectionsEnabled, setDetectionsEnabled] = useState(true); // AI On/Off
+    const [aiBackend, setAiBackend] = useState('cloud'); // 'local' or 'cloud'
+    const [customBackendUrl, setCustomBackendUrl] = useState('http://localhost:8000');
 
     // WebSocket State
     const [connectionUrl, setConnectionUrl] = useState(null);
@@ -78,26 +79,21 @@ function DashboardContent() {
         if (!selectedCamera) return;
         const { sourceType, streamUrl } = selectedCamera;
 
-        // --- PRODUCTION CLOUD CONFIG ---
-        const host = 'ghauri21-ppedetector.hf.space';
-        const protocol = 'wss';
+        // --- DYNAMIC BACKEND CONFIG ---
+        const host = aiBackend === 'cloud' ? 'ghauri21-ppedetector.hf.space' : customBackendUrl.replace('http://', '').replace('https://', '');
+        const protocol = aiBackend === 'cloud' ? 'wss' : (customBackendUrl.startsWith('https') ? 'wss' : 'ws');
 
-        // 1. Detect Private/Local IP (DroidCam)
+        // Logic check: source_type=client for local webcams or local IP cameras
         const isPrivate = streamUrl && (streamUrl.includes('192.168.') || streamUrl.includes('10.') || streamUrl.includes('localhost') || streamUrl.includes('127.0.0.1'));
-
-        // 2. Select Connection Mode:
-        // - 'client' relay for Webcams and Private DroidCams (Required for Cloud Security)
-        // - 'rtsp' (Direct AI Connect) for public URLs
         const mode = (sourceType === 'camera' || isPrivate) ? 'client' : 'rtsp';
 
         let url = `${protocol}://${host}/ws/detect/live?source_type=${mode}&quality=${streamQuality}&privacy=${privacyMode}&detections=${detectionsEnabled}`;
 
-        // Only pass custom_url if the Cloud AI can actually reach it (Public IPs)
         if (sourceType === 'rtsp' && !isPrivate) {
             url += `&custom_url=${encodeURIComponent(streamUrl)}`;
         }
 
-        console.log(`🚀 [SECURE CONNECT] Initializing Engine: ${url}`);
+        console.log(`🚀 [CONNECT] Initializing Engine: ${url}`);
         setConnectionUrl(url);
     };
 
@@ -134,8 +130,7 @@ function DashboardContent() {
                 })
                 .catch(err => console.error("Webcam blocked:", err));
         } else {
-            // RELAY B: Private IP (DroidCam) via Secure API Proxy
-            const proxyUrl = `/api/proxy?url=${encodeURIComponent(selectedCamera.streamUrl)}`;
+            // RELAY B: Direct Camera Fetch (No Proxy)
             const img = new Image();
             img.crossOrigin = "anonymous";
 
@@ -143,22 +138,22 @@ function DashboardContent() {
             img.onerror = () => {
                 if (!loadError) {
                     loadError = true;
-                    console.error("🌐 NETWORK STATUS: Camera is currently unreachable via cloud proxy. (This is expected for local IPs on a cloud host).");
+                    console.error("🌐 CAMERA OFFLINE: Local resource unreachable.");
+                    setCameraError("Local camera unreachable. Check your network or DroidCam app.");
                 }
             };
-            img.src = proxyUrl;
+            img.src = selectedCamera.streamUrl;
 
             streamIntervalRef.current = setInterval(() => {
                 if (!canvasRef.current || !isConnected || loadError) return;
 
-                // Only attempt to draw if the image is valid and loaded
                 if (img.complete && img.naturalWidth > 0) {
                     const ctx = canvasRef.current.getContext('2d');
                     ctx.drawImage(img, 0, 0, 640, 480);
                     const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.5);
                     sendMessage({ image: dataUrl });
                 }
-            }, 150);
+            }, 100); // 10fps for better performance
         }
 
         return () => { if (streamIntervalRef.current) clearInterval(streamIntervalRef.current); };
@@ -281,6 +276,37 @@ function DashboardContent() {
     return (
         <div className="p-8 space-y-8 max-w-[1600px] mx-auto">
             <UserHeader user={user} />
+
+            <div className="flex gap-4 items-center bg-white p-4 rounded-3xl border border-zinc-100 shadow-sm">
+                <div className="flex bg-zinc-100 p-1 rounded-xl">
+                    <button
+                        onClick={() => setAiBackend('cloud')}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${aiBackend === 'cloud' ? 'bg-white shadow text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
+                    >
+                        Cloud AI
+                    </button>
+                    <button
+                        onClick={() => setAiBackend('local')}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${aiBackend === 'local' ? 'bg-white shadow text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
+                    >
+                        Local AI
+                    </button>
+                </div>
+                {aiBackend === 'local' && (
+                    <input
+                        className="bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        value={customBackendUrl}
+                        onChange={(e) => setCustomBackendUrl(e.target.value)}
+                        placeholder="http://localhost:8000"
+                    />
+                )}
+                <div className="ml-auto flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-zinc-300'}`} />
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                        {isConnected ? 'Engine Active' : 'Engine Idle'}
+                    </span>
+                </div>
+            </div>
 
             <div className="min-h-[500px] animate-in fade-in slide-in-from-bottom-2 duration-700">
                 <video ref={videoRef} className="hidden" muted playsInline />
