@@ -26,8 +26,6 @@ function DashboardContent() {
     const [streamQuality, setStreamQuality] = useState('sd'); // 'sd' or 'hd'
     const [privacyMode, setPrivacyMode] = useState(false); // GDPR Privacy
     const [detectionsEnabled, setDetectionsEnabled] = useState(true); // AI On/Off
-    const [aiBackend, setAiBackend] = useState('cloud'); // 'local' or 'cloud'
-    const [customBackendUrl, setCustomBackendUrl] = useState('http://localhost:8000');
 
     // WebSocket State
     const [connectionUrl, setConnectionUrl] = useState(null);
@@ -80,21 +78,23 @@ function DashboardContent() {
         if (!selectedCamera) return;
         const { sourceType, streamUrl } = selectedCamera;
 
-        // --- DYNAMIC BACKEND CONFIG ---
-        const host = aiBackend === 'cloud' ? 'ghauri21-ppedetector.hf.space' : customBackendUrl.replace('http://', '').replace('https://', '');
-        const protocol = aiBackend === 'cloud' ? 'wss' : (customBackendUrl.startsWith('https') ? 'wss' : 'ws');
+        // --- SAAS BACKEND CONFIG ---
+        const host = 'ghauri21-ppedetector.hf.space';
+        const protocol = 'wss';
 
-        // Logic check: source_type=client for local webcams or local IP cameras
-        const isPrivate = streamUrl && (streamUrl.includes('192.168.') || streamUrl.includes('10.') || streamUrl.includes('localhost') || streamUrl.includes('127.0.0.1'));
-        const mode = (sourceType === 'camera' || isPrivate) ? 'client' : 'rtsp';
+        // PROTOCOL INTELLIGENCE:
+        // - 'client': Browser fetches (Webcams & HTTP DroidCam). This is zero-cost and fast.
+        // - 'rtsp'  : Backend fetches (CCTV/NVR). Necessary because browsers don't speak RTSP.
+        const isRtsp = streamUrl && streamUrl.startsWith('rtsp');
+        const mode = (sourceType === 'camera' || (!isRtsp && streamUrl)) ? 'client' : 'rtsp';
 
         let url = `${protocol}://${host}/ws/detect/live?source_type=${mode}&quality=${streamQuality}&privacy=${privacyMode}&detections=${detectionsEnabled}`;
 
-        if (sourceType === 'rtsp' && !isPrivate) {
+        if (mode === 'rtsp') {
             url += `&custom_url=${encodeURIComponent(streamUrl)}`;
         }
 
-        console.log(`🚀 [CONNECT] Initializing Engine: ${url}`);
+        console.log(`🚀 [SAAS CONNECT] Initializing Engine: ${url}`);
         setConnectionUrl(url);
     };
 
@@ -279,28 +279,12 @@ function DashboardContent() {
             <UserHeader user={user} />
 
             <div className="flex gap-4 items-center bg-white p-4 rounded-3xl border border-zinc-100 shadow-sm">
-                <div className="flex bg-zinc-100 p-1 rounded-xl">
-                    <button
-                        onClick={() => setAiBackend('cloud')}
-                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${aiBackend === 'cloud' ? 'bg-white shadow text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
-                    >
-                        Cloud AI
-                    </button>
-                    <button
-                        onClick={() => setAiBackend('local')}
-                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${aiBackend === 'local' ? 'bg-white shadow text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
-                    >
-                        Local AI
-                    </button>
+                <div className="flex items-center gap-2">
+                    <Activity size={18} className="text-blue-600" />
+                    <span className="text-xs font-bold text-zinc-900">SaaS AI Engine</span>
+                    <Badge variant="secondary" className="px-2 py-0.5 rounded-lg text-[10px] bg-blue-50 text-blue-600 border-blue-100 uppercase tracking-tighter">HuggingFace Production</Badge>
                 </div>
-                {aiBackend === 'local' && (
-                    <input
-                        className="bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                        value={customBackendUrl}
-                        onChange={(e) => setCustomBackendUrl(e.target.value)}
-                        placeholder="http://localhost:8000"
-                    />
-                )}
+
                 <div className="ml-auto flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-zinc-300'}`} />
                     <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
